@@ -1,0 +1,11 @@
+# Render Blueprint: static site (no build step - public/ is committed pre-built)
+services:
+  - type: web
+    runtime: static
+    name: lantern-ring-viewer
+    staticPublishPath: ./public
+    buildCommand: ""
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600

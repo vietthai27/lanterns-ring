@@ -1,0 +1,147 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Green Lantern Ring Preview</title>
+<style>
+:root{--bg:#09130f;--panel:#0d1c16e6;--line:#1f3a2f;--fg:#d8f3e4;--mut:#7fa592;--acc:#2be58a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,sans-serif;overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%}
+.panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;backdrop-filter:blur(8px)}
+#main{top:14px;left:14px;width:292px;max-height:calc(100% - 28px);overflow:auto}
+#info{right:14px;top:14px;width:268px}
+h1{font-size:16px;margin:0 0 2px;color:#fff}h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:14px 0 6px}
+.sub{color:var(--mut);font-size:12px}
+label.row{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer}
+.dot{width:11px;height:11px;border-radius:50%;flex:none;border:1px solid #0006}
+input[type=checkbox]{accent-color:var(--acc)}input[type=range]{width:100%;accent-color:var(--acc)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}button{background:#13281f;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td{padding:3px 0;border-bottom:1px solid #16302580}td:last-child{text-align:right;color:#fff;font-variant-numeric:tabular-nums;padding-left:8px}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--acc);color:var(--acc);margin-top:6px}
+#info .params label{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12.5px}
+input[type=number]{width:74px;background:#0a1712;color:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit;text-align:right}
+input[type=number]:focus{outline:1px solid var(--acc)}
+.stl{margin-left:auto;padding:1px 8px;font-size:11px}
+@media(max-width:760px){#info{display:none}#main{width:calc(100% - 28px);max-height:46%}}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="main" class="panel">
+  <h1>Green Lantern Ring</h1><div class="sub">__SUB__</div><span class="tag">__TAG__</span>
+  <h2>Bộ phận</h2><div id="list"></div>
+  <h2>Tách rời các bộ phận</h2><input type="range" id="exp" min="0" max="100" value="0"><div class="sub" id="expv">Lắp ráp</div>
+  <h2>Hiển thị</h2>
+  <label class="row"><input type="checkbox" id="wire">Khung lưới (wireframe)</label>
+  <label class="row"><input type="checkbox" id="spin" checked>Tự xoay</label>
+  <label class="row"><input type="checkbox" id="cut">Cắt ngang (xem bên trong)</label>
+  <input type="range" id="cutv" min="-14" max="14" step="0.1" value="0" disabled>
+  <h2>Góc nhìn</h2>
+  <div class="btns"><button data-v="iso">3D</button><button data-v="top">Trên</button><button data-v="front">Trước</button><button data-v="side">Cạnh</button><button data-v="close">Mặt nhẫn</button></div>
+  <div class="sub" style="margin-top:10px">Kéo chuột: xoay · Cuộn: zoom · Chuột phải: dịch</div>
+</div>
+<div id="info" class="panel"><h1>Thông số mô hình</h1><div class="sub">Sửa số (mm) → mô hình đổi ngay</div>
+<div class="params">
+<label>Khung vàng – rộng (X)<input type="number" id="pX" value="__NX__" min="8" max="60" step="0.1"></label>
+<label>Khung vàng – sâu (Y)<input type="number" id="pY" value="__NY__" min="8" max="60" step="0.1"></label>
+<label>__TL__<input type="number" id="pT" value="__NT__" min="0.4" max="6" step="0.1"></label>
+<label>Độ dày đá<input type="number" id="pG" value="__NG__" min="0.3" max="6" step="0.1"></label>
+<label>Chu vi ngón tay (thân nhẫn)<input type="number" id="pC" value="__NC__" min="30" max="90" step="0.5"></label>
+</div><div class="btns" style="margin-top:8px"><button id="reset">Đặt lại</button></div>
+<div class="sub" style="margin-top:6px">Đá co giãn theo khung. Thân nhẫn co giãn đều (lỗ ≈ chu vi ngón).</div>
+<h2>Kích thước hiện tại (mm)</h2><table id="dims"></table>
+<table style="margin-top:6px"><tr><td>Tổng thể (đã lắp)</td><td id="tot"></td></tr><tr><td>Đường kính lỗ nhẫn</td><td id="hole"></td></tr></table>
+<div class="sub" style="margin-top:8px">Nút <b>STL</b> cạnh mỗi bộ phận tải file đã theo thông số hiện tại.</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const DATA=__DATA__;
+const $=id=>document.getElementById(id);
+const b64=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let k=0;k<b.length;k++)u[k]=b.charCodeAt(k);return u.buffer};
+const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});renderer.setPixelRatio(Math.min(Math.max(devicePixelRatio,2),3));renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.8;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled=true;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x09130f);scene.fog=new THREE.Fog(0x09130f,140,460);
+const cam=new THREE.PerspectiveCamera(35,1,.5,1500);cam.up.set(0,0,1);
+const ctl=new THREE.OrbitControls(cam,renderer.domElement);ctl.enableDamping=true;ctl.autoRotate=true;ctl.autoRotateSpeed=1.2;
+// studio environment for reflections (gold / glossy gems)
+(function(){const es=new THREE.Scene();
+  const sg=new THREE.SphereGeometry(50,48,24).rotateX(Math.PI/2),pa=sg.attributes.position,col=new Float32Array(pa.count*3);
+  for(let k=0;k<pa.count;k++){const h=Math.max(0,Math.min(1,(pa.getZ(k)/50+.3)/1.3));
+    const v=.012+.16*h*h;col[k*3]=v;col[k*3+1]=v;col[k*3+2]=v;}
+  sg.setAttribute('color',new THREE.BufferAttribute(col,3));
+  es.add(new THREE.Mesh(sg,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide})));
+  [[0,-40,25,30,14,0xffffff,2.4],[40,10,10,10,24,0xfff1d0,1.8],[-40,10,15,10,20,0xffffff,1.5],[0,30,40,40,8,0xffffff,1.1]].forEach(a=>{
+    const l=new THREE.Mesh(new THREE.PlaneGeometry(a[3],a[4]),new THREE.MeshBasicMaterial({color:new THREE.Color(a[5]).multiplyScalar(a[6]),side:THREE.DoubleSide}));
+    l.position.set(a[0],a[1],a[2]);l.lookAt(0,0,0);es.add(l);});
+  const pm=new THREE.PMREMGenerator(renderer);scene.environment=pm.fromScene(es,.02).texture;pm.dispose();})();
+scene.add(new THREE.HemisphereLight(0xdfffee,0x10241a,.08));
+const k1=new THREE.DirectionalLight(0xffffff,.55);k1.position.set(50,-70,90);k1.castShadow=true;k1.shadow.mapSize.set(2048,2048);Object.assign(k1.shadow.camera,{left:-40,right:40,top:40,bottom:-40,near:10,far:260});k1.shadow.bias=-.0004;k1.shadow.normalBias=.15;scene.add(k1);
+const k2=new THREE.DirectionalLight(0x66ffb0,.25);k2.position.set(-70,50,30);scene.add(k2);
+const k3=new THREE.DirectionalLight(0xffe2a0,.25);k3.position.set(0,80,-20);scene.add(k3);
+const grid=new THREE.GridHelper(160,32,0x1f4a38,0x12281f);grid.rotation.x=Math.PI/2;grid.position.z=__FLOORZ__-0.05;scene.add(grid);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,200),new THREE.ShadowMaterial({opacity:.45}));floor.position.z=__FLOORZ__;floor.receiveShadow=true;scene.add(floor);
+const clip=new THREE.Plane(new THREE.Vector3(0,-1,0),0);   // keeps y <= constant
+function creased(pos,idx,deg){ // smooth shading only across edges flatter than `deg` -> crisp edges, smooth curves
+  const nf=idx.length/3,fn=new Float32Array(nf*3),inc=new Map(),cs=Math.cos(deg*Math.PI/180);
+  for(let f=0;f<nf;f++){const a=idx[f*3]*3,b=idx[f*3+1]*3,c=idx[f*3+2]*3;
+    const ux=pos[b]-pos[a],uy=pos[b+1]-pos[a+1],uz=pos[b+2]-pos[a+2],vx=pos[c]-pos[a],vy=pos[c+1]-pos[a+1],vz=pos[c+2]-pos[a+2];
+    let x=uy*vz-uz*vy,y=uz*vx-ux*vz,z=ux*vy-uy*vx;const l=Math.hypot(x,y,z)||1;fn[f*3]=x/l;fn[f*3+1]=y/l;fn[f*3+2]=z/l;
+    for(let k=0;k<3;k++){const v=idx[f*3+k];(inc.get(v)||inc.set(v,[]).get(v)).push(f);}}
+  const P=new Float32Array(nf*9),N=new Float32Array(nf*9);
+  for(let f=0;f<nf;f++)for(let k=0;k<3;k++){const v=idx[f*3+k];let nx=0,ny=0,nz=0;
+    for(const g of inc.get(v)){const d=fn[f*3]*fn[g*3]+fn[f*3+1]*fn[g*3+1]+fn[f*3+2]*fn[g*3+2];if(d>=cs){nx+=fn[g*3];ny+=fn[g*3+1];nz+=fn[g*3+2];}}
+    const l=Math.hypot(nx,ny,nz)||1,o=f*9+k*3;N[o]=nx/l;N[o+1]=ny/l;N[o+2]=nz/l;P[o]=pos[v*3];P[o+1]=pos[v*3+1];P[o+2]=pos[v*3+2];}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(P,3));g.setAttribute('normal',new THREE.BufferAttribute(N,3));return g;}
+const meshes=[];
+DATA.parts.forEach(p=>{
+  const g=creased(new Float32Array(b64(p.v)),new Uint32Array(b64(p.i)),p.group==='gem'?8:42);
+  const gem=p.group==='gem',gold=p.group==='gold';
+  const mat=new THREE.MeshPhysicalMaterial({color:p.color,metalness:gold?1:gem?0:0.05,roughness:gold?0.24:gem?0.12:0.5,side:THREE.DoubleSide,
+    clearcoat:gem?.45:0,clearcoatRoughness:.06,envMapIntensity:gold?2.4:gem?.3:.35,
+    emissive:gem?new THREE.Color(p.color).multiplyScalar(.12):new THREE.Color(0x000000)});
+  const m=new THREE.Mesh(g,mat);m.castShadow=m.receiveShadow=true;m.userData={up:p.up,group:p.group};scene.add(m);meshes.push(m);
+  const row=document.createElement('label');row.className='row';
+  row.innerHTML='<input type="checkbox" checked><span class="dot" style="background:'+p.color+'"></span><span>'+p.name+'</span>';
+  row.firstChild.onchange=e=>m.visible=e.target.checked;$('list').appendChild(row);
+  m.userData.kind=p.kind;m.userData.name=p.name;m.userData.base=0;
+  if(p.kind!=='ring')g.translate(0,0,-(g.computeBoundingBox(),g.boundingBox.min.z));      // every part sits on z=0 of its own; position.z set in place()
+  const bt=document.createElement('button');bt.className='stl';bt.textContent='STL';bt.onclick=e=>{e.preventDefault();downloadSTL(m)};row.appendChild(bt);
+  const tr=document.createElement('tr');tr.innerHTML='<td>'+p.name+'</td><td></td>';$('dims').appendChild(tr);m.userData.cell=tr.lastChild;
+});
+const NOM={x:__NX__,y:__NY__,c:__NC__,hole:__NH__,t:__NT__,g:__NG__};
+function place(){const fx=+$('pX').value/NOM.x,fy=+$('pY').value/NOM.y,t=+$('pT').value,g=+$('pG').value,r=+$('pC').value/NOM.c;
+  if(![fx,fy,t,g,r].every(v=>isFinite(v)&&v>0))return;
+  meshes.forEach(m=>{const k=m.userData.kind;
+    if(k==='gf'){m.scale.set(fx,fy,t/NOM.t);m.userData.base=0}
+    else if(k==='gb'){m.scale.set(fx,fy,t/NOM.t);m.userData.base=0}
+    else if(k==='gt'){m.scale.set(fx,fy,t/NOM.t);m.userData.base=t}
+    else if(k==='gem'){m.scale.set(fx,fy,g/NOM.g);m.userData.base=t*__FF__}
+    else{m.scale.set(r,r,r);m.userData.base=0}});
+  explode();readout();}
+function readout(){const tot=new THREE.Box3();
+  meshes.forEach(m=>{const b=new THREE.Box3().setFromObject(m);b.translate(new THREE.Vector3(0,0,-(m.position.z-m.userData.base)));tot.union(b);
+    const e=b.getSize(new THREE.Vector3());m.userData.cell.textContent=e.x.toFixed(1)+' × '+e.y.toFixed(1)+' × '+e.z.toFixed(1);});
+  const e=tot.getSize(new THREE.Vector3());$('tot').textContent=e.x.toFixed(1)+' × '+e.y.toFixed(1)+' × '+e.z.toFixed(1);
+  $('hole').textContent=(NOM.hole*(+$('pC').value/NOM.c)).toFixed(1);}
+function downloadSTL(m){const pos=m.geometry.attributes.position,n=pos.count/3,buf=new ArrayBuffer(84+n*50),dv=new DataView(buf);dv.setUint32(80,n,true);
+  const mat=new THREE.Matrix4().compose(new THREE.Vector3(0,0,m.userData.base),new THREE.Quaternion(),m.scale);
+  const v=[new THREE.Vector3(),new THREE.Vector3(),new THREE.Vector3()],nn=new THREE.Vector3(),u=new THREE.Vector3();let o=84;
+  for(let f=0;f<n;f++){for(let k=0;k<3;k++)v[k].fromBufferAttribute(pos,f*3+k).applyMatrix4(mat);
+    nn.subVectors(v[1],v[0]).cross(u.subVectors(v[2],v[0])).normalize();
+    [nn,...v].forEach(q=>{dv.setFloat32(o,q.x,true);dv.setFloat32(o+4,q.y,true);dv.setFloat32(o+8,q.z,true);o+=12});o+=2;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'model/stl'}));
+  a.download=m.userData.name.replace(/[^\w]+/g,'_')+'.stl';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+['pX','pY','pT','pG','pC'].forEach(id=>$(id).addEventListener('input',place));
+$('reset').onclick=()=>{[['pX',NOM.x],['pY',NOM.y],['pT',NOM.t],['pG',NOM.g],['pC',NOM.c]].forEach(([i,v])=>$(i).value=v);place();};
+function explode(){const s=$('exp').value/100;
+  meshes.forEach(m=>{const u=m.userData.up,f=14;m.position.set(0,0,m.userData.base+u[2]*f*s);});
+  $('expv').textContent=s===0?'Lắp ráp':'Tách '+Math.round(s*100)+'%';}
+$('exp').oninput=explode;
+$('wire').onchange=e=>meshes.forEach(m=>m.material.wireframe=e.target.checked);
+$('spin').onchange=e=>ctl.autoRotate=e.target.checked;
+function cutUpdate(){const on=$('cut').checked;$('cutv').disabled=!on;clip.constant=+$('cutv').value;
+  meshes.forEach(m=>{m.material.clippingPlanes=on?[clip]:[];m.material.needsUpdate=true;});}
+$('cut').onchange=cutUpdate;$('cutv').oninput=cutUpdate;
+const V={iso:[[62,-88,58],[0,0,-9]],top:[[0,-.01,95],[0,0,0]],front:[[0,-95,-6],[0,0,-6]],side:[[95,0,-6],[0,0,-6]],close:[[0,-46,40],[0,0,2]]};
+document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const v=V[b.dataset.v];$('spin').checked=false;ctl.autoRotate=false;cam.position.set(...v[0]);ctl.target.set(...v[1]);ctl.update();});
+cam.position.set(...V.iso[0]);ctl.target.set(...V.iso[1]);place();
+function resize(){renderer.setSize(innerWidth,innerHeight,false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+(function loop(){requestAnimationFrame(loop);ctl.update();renderer.render(scene,cam)})();
+</script></body></html>
